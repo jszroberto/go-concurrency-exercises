@@ -20,17 +20,21 @@ package main
 import (
 	"errors"
 	"log"
+	"sync"
+	"time"
 )
 
 // SessionManager keeps track of all sessions from creation, updating
 // to destroying.
 type SessionManager struct {
 	sessions map[string]Session
+	mtx      sync.Mutex
 }
 
 // Session stores the session's data
 type Session struct {
-	Data map[string]interface{}
+	Data      map[string]interface{}
+	UpdatedAt time.Time
 }
 
 // NewSessionManager creates a new sessionManager
@@ -39,7 +43,26 @@ func NewSessionManager() *SessionManager {
 		sessions: make(map[string]Session),
 	}
 
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			m.cleanup()
+		}
+	}()
+
 	return m
+}
+
+func (m *SessionManager) cleanup() {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	for k, v := range m.sessions {
+		if time.Since(v.UpdatedAt) > 5*time.Second {
+			delete(m.sessions, k)
+		}
+	}
 }
 
 // CreateSession creates a new session and returns the sessionID
@@ -50,7 +73,8 @@ func (m *SessionManager) CreateSession() (string, error) {
 	}
 
 	m.sessions[sessionID] = Session{
-		Data: make(map[string]interface{}),
+		Data:      make(map[string]interface{}),
+		UpdatedAt: time.Now(),
 	}
 
 	return sessionID, nil
@@ -79,7 +103,8 @@ func (m *SessionManager) UpdateSessionData(sessionID string, data map[string]int
 
 	// Hint: you should renew expiry of the session here
 	m.sessions[sessionID] = Session{
-		Data: data,
+		Data:      data,
+		UpdatedAt: time.Now(),
 	}
 
 	return nil
