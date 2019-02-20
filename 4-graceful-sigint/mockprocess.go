@@ -9,6 +9,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
 	"time"
 )
 
@@ -21,10 +23,18 @@ type MockProcess struct {
 func (m *MockProcess) Run() {
 	m.isRunning = true
 
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
 	fmt.Print("Process running..")
 	for {
-		fmt.Print(".")
-		time.Sleep(1 * time.Second)
+		select {
+		case <-stop:
+			m.Stop()
+			return
+		default:
+			fmt.Print(".")
+			time.Sleep(1 * time.Second)
+		}
 	}
 }
 
@@ -36,8 +46,15 @@ func (m *MockProcess) Stop() {
 	}
 
 	fmt.Print("\nStopping process..")
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
 	for {
-		fmt.Print(".")
-		time.Sleep(1 * time.Second)
+		select {
+		case <-stop:
+			return
+		default:
+			fmt.Print(".")
+			time.Sleep(1 * time.Second)
+		}
 	}
 }
